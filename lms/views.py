@@ -1,6 +1,6 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
-from lms.serializers import CourseSerializer, LessonSerializer
+from lms.serializers import CourseSerializer, LessonSerializer, LessonsCountSerializer
 from lms.models import Course, Lesson
 
 
@@ -8,6 +8,10 @@ class CourseViewSet(ModelViewSet):
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
 
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return LessonsCountSerializer
+        return CourseSerializer
 
 class LessonCreateApiView(CreateAPIView):
     queryset = Lesson.objects.all()

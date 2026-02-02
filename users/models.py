@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
-from lms.models import Course, Lesson
+from lms.models import Course
+from lms.models import Lesson
 
 class CustomUserManager(UserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -32,7 +33,7 @@ class User(AbstractUser):
         verbose_name = "пользователь"
         verbose_name_plural = "пользователи"
 
-class Payment:
+class Payment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="пользователь")
     payment_date = models.DateTimeField(auto_now_add=True, verbose_name="дата платежа")
     paid_course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name="оплаченный курс", null=True, blank=True)

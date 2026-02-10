@@ -52,7 +52,7 @@ INSTALLED_APPS = [
     'lms',
     'users',
     'django_filters',
-    'rest_framework_simplejwt'
+    'rest_framework_simplejwt',
 ]
 
 MIDDLEWARE = [

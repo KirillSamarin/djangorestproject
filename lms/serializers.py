@@ -1,12 +1,21 @@
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
-
-from lms.models import Course, Lesson
+from lms.models import Course, Lesson, Subscription
 
 class CourseSerializer(ModelSerializer):
     lessons = SerializerMethodField()
+    is_subscribed = SerializerMethodField()
 
     def get_lessons(self, course):
         return [lesson.name for lesson in Lesson.objects.filter(course=course)]
+
+    def get_is_subscribed(self, course):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Subscription.objects.filter(
+                user=request.user,
+                course=course
+            ).exists()
+        return False
 
     class Meta:
         model = Course

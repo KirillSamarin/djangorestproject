@@ -7,6 +7,7 @@ class Course(models.Model):
     thumbnail = models.ImageField(upload_to="photos/", null=True, blank=True, verbose_name="превью")
     description = models.TextField(verbose_name='описание', null=True, blank=True)
     owner = models.ForeignKey("users.User", verbose_name='владелец', on_delete=models.CASCADE, null=True)
+    stripe_product_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="ID продукта в Stripe")
 
 class Lesson(models.Model):
 

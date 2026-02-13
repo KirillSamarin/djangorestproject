@@ -1,3 +1,4 @@
+from django.http import HttpResponse
 from django.utils.decorators import method_decorator
 from django_filters.rest_framework import DjangoFilterBackend, OrderingFilter
 from drf_yasg import openapi
@@ -5,6 +6,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny
+from lms.services import create_stripe_checkout_session
 from .models import Payment, User
 from .serializers import UserSerializer
 from .serializers import PaymentSerializer
@@ -67,7 +69,28 @@ class PaymentViewSet(ModelViewSet):
     filterset_fields = ['paid_course', 'paid_lesson', 'payment_method']
     ordering_fields = ['payment_date']
 
+    def perform_create(self, serializer):
+        payment = serializer.save()
+        if payment.paid_course:
+            success_url = "http://localhost:8000/success/"
+            cancel_url = "http://localhost:8000/cancel/"
+            checkout_url = create_stripe_checkout_session(
+                course=payment.paid_course,
+                user_email=self.request.user.email,
+                amount=int(payment.amount * 100),
+                success_url=success_url,
+                cancel_url=cancel_url
+            )
+            payment.payment_url = checkout_url
+            payment.save()
+
 class UserCreateAPIView(CreateAPIView):
     serializer_class = UserSerializer
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
+
+def payment_success(request):
+    return HttpResponse("Payment successful!")
+
+def payment_cancel(request):
+    return HttpResponse("Payment cancelled!")

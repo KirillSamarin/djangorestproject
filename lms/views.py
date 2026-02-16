@@ -11,6 +11,7 @@ from users.permissions import IsOwner, IsNotModer, IsOwnerOrModer
 from lms.paginators import PagePagination
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from lms.tasks import send_course_update_email
 
 class SubscriptionAPIView(APIView):
 
@@ -104,6 +105,10 @@ class CourseViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        course = serializer.save()
+        send_course_update_email.delay(course.pk)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

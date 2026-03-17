@@ -1,0 +1,108 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: djangodb
+          POSTGRES_USER: djangouser
+          POSTGRES_PASSWORD: djangopass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U djangouser -d djangodb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SECRET_KEY: "ci-secret-key"
+      NAME: djangodb
+      USER: djangouser
+      PASSWORD: djangopass
+      HOST: 127.0.0.1
+      PORT: "5432"
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/1
+      CELERY_TIMEZONE: Europe/Moscow
+      CELERY_TASK_TRACK_STARTED: "True"
+      CELERY_TASK_TIME_LIMIT: "1800"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run tests
+        run: python manage.py test
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync project to server (rsync)
+        run: |
+          rsync -az --delete \
+            --exclude ".git/" \
+            --exclude "__pycache__/" \
+            --exclude ".pytest_cache/" \
+            --exclude ".venv/" \
+            --exclude ".env" \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      - name: Deploy via docker compose (remote)
+        run: |
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "set -euo pipefail; cd '${{ secrets.DEPLOY_PATH }}'; docker compose pull || true; docker compose up -d --build; docker compose exec -T web python manage.py migrate --noinput"
+

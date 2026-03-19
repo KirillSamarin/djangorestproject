@@ -1,0 +1,129 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: djangodb
+          POSTGRES_USER: djangouser
+          POSTGRES_PASSWORD: djangopass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U djangouser -d djangodb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SECRET_KEY: "ci-secret-key"
+      NAME: djangodb
+      USER: djangouser
+      PASSWORD: djangopass
+      HOST: 127.0.0.1
+      PORT: "5432"
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/1
+      CELERY_TIMEZONE: Europe/Moscow
+      CELERY_TASK_TRACK_STARTED: "True"
+      CELERY_TASK_TIME_LIMIT: "1800"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run tests
+        run: python manage.py test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy project files to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SHH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo mkdir -p "${{ secrets.DEPLOY_PATH }}"
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            # Если это git репозиторий, обновляем, иначе клонируем
+            if [ -d .git ]; then
+              sudo git pull origin develop
+            else
+              sudo git clone https://github.com/${{ github.repository }} .
+            fi
+
+      - name: Deploy via docker compose (remote)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SHH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+            
+            sudo cat > .env << 'ENVFILE'
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            NAME=${{ secrets.NAME }}
+            USER=${{ secrets.USER }}
+            PASSWORD=${{ secrets.PASSWORD }}
+            HOST=${{ secrets.HOST }}
+            PORT=${{ secrets.PORT }}
+            CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL }}
+            CELERY_RESULT_BACKEND=${{ secrets.CELERY_RESULT_BACKEND }}
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_PUBLIC_KEY=${{ secrets.STRIPE_PUBLIC_KEY }}
+            CELERY_TIMEZONE = ${{ secrets.CELERY_TIMEZONE }}
+            CELERY_TASK_TRACK_STARTED = ${{ secrets.CELERY_TASK_TRACK_STARTED }}
+            CELERY_TASK_TIME_LIMIT = ${{ secrets.CELERY_TASK_TIME_LIMIT }}
+            ENVFILE
+            
+            # Останавливаем старые контейнеры
+            sudo docker-compose down
+            
+            # Собираем и запускаем
+            sudo docker-compose up -d --build
+

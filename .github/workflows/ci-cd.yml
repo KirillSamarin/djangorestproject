@@ -78,31 +78,43 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/develop'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Ensure deploy directory exists (remote)
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            if [ -d "${{ secrets.DEPLOY_PATH }}" ]; then
+              echo "Deploy path exists; updating code in-place."
+            else
+              echo "Deploy path not found; creating directory."
+              mkdir -p "${{ secrets.DEPLOY_PATH }}"
+            fi
 
-      - name: Add server to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Sync project to server (rsync)
-        run: |
-          rsync -az --delete \
-            --exclude ".git/" \
-            --exclude "__pycache__/" \
-            --exclude ".pytest_cache/" \
-            --exclude ".venv/" \
-            --exclude ".env" \
-            -e "ssh -p ${{ secrets.SSH_PORT }}" \
-            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+      - name: Upload project to server (scp)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy via docker compose (remote)
-        run: |
-          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "set -euo pipefail; cd '${{ secrets.DEPLOY_PATH }}'; docker compose pull || true; docker compose up -d --build; docker compose exec -T web python manage.py migrate --noinput"
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+            docker compose pull || true
+            docker compose up -d --build
+            docker compose exec -T web python manage.py migrate --noinput
 

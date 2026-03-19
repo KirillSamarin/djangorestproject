@@ -2,9 +2,8 @@ name: CI/CD
 
 on:
   push:
-    branches: [master, develop]
-  pull_request:
-    branches: [master, develop]
+    branches: "*"
+
 
 jobs:
   test:

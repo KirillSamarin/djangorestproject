@@ -105,6 +105,22 @@ jobs:
           script: |
             cd "${{ secrets.DEPLOY_PATH }}"
             
+            cat > .env << 'ENVFILE'
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            NAME=${{ secrets.NAME }}
+            USER=${{ secrets.USER }}
+            PASSWORD=${{ secrets.PASSWORD }}
+            HOST=${{ secrets.HOST }}
+            PORT=${{ secrets.PORT }}
+            CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL }}
+            CELERY_RESULT_BACKEND=${{ secrets.CELERY_RESULT_BACKEND }}
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_PUBLIC_KEY=${{ secrets.STRIPE_PUBLIC_KEY }}
+            CELERY_TIMEZONE = ${{ secrets.CELERY_TIMEZONE }}
+            CELERY_TASK_TRACK_STARTED = ${{ secrets.CELERY_TASK_TRACK_STARTED }}
+            CELERY_TASK_TIME_LIMIT = ${{ secrets.CELERY_TASK_TIME_LIMIT }}
+            ENVFILE
+            
             # Останавливаем старые контейнеры
             sudo docker-compose down
             
@@ -113,5 +129,5 @@ jobs:
             
             # Ждем запуска и выполняем миграции
             sleep 10
-            sudo docker-compose exec -T web python manage.py migrate
+            sudo docker-compose exec -T djangorestproject-web python manage.py migrate
 

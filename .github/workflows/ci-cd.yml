@@ -105,7 +105,7 @@ jobs:
           script: |
             cd "${{ secrets.DEPLOY_PATH }}"
             
-            cat > .env << 'ENVFILE'
+            sudo cat > .env << 'ENVFILE'
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             NAME=${{ secrets.NAME }}
             USER=${{ secrets.USER }}

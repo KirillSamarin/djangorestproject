@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches:
-      - "**"
-  workflow_dispatch:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 jobs:
   test:
@@ -86,12 +86,13 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -euo pipefail
-            if [ -d "${{ secrets.DEPLOY_PATH }}" ]; then
-              echo "Deploy path exists; updating code in-place."
+            sudo mkdir -p "${{ secrets.DEPLOY_PATH }}"
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            if [-d .git]; then
+              sudo git pull origin main
             else
-              echo "Deploy path not found; creating directory."
-              mkdir -p "${{ secrets.DEPLOY_PATH }}"
+              sudo git clone https://github.com/${{ github.repository}}
             fi
 
       - name: Upload project to server (scp)

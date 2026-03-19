@@ -91,7 +91,7 @@ jobs:
             
             # Если это git репозиторий, обновляем, иначе клонируем
             if [ -d .git ]; then
-              sudo git pull origin main
+              sudo git pull origin develop
             else
               sudo git clone https://github.com/${{ github.repository }} .
             fi

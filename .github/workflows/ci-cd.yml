@@ -126,8 +126,4 @@ jobs:
             
             # Собираем и запускаем
             sudo docker-compose up -d --build
-            
-            # Ждем запуска и выполняем миграции
-            sleep 10
-            sudo docker-compose exec -T djangorestproject-web python manage.py migrate
 
